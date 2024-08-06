@@ -1,88 +1,73 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
 using System.Drawing;
 using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace MasterMindGame
 {
     public partial class Form1 : Form
     {
-        public List<PictureBox> panel1List = new List<PictureBox>(); // 
-        public List<PictureBox> panel2List = new List<PictureBox>(); //
-        public List<Color> savedColors = new List<Color>(); // panel1 suffle ToDo!!! csak színek 
+        public List<PictureBox> panel1List = new List<PictureBox>();
+        public List<PictureBox> panel2List = new List<PictureBox>();
         public List<string> savedColorsName = new List<string>();
-        public List<string> panel2Colors = new List<string>(); // panel2 csak szinek nevei
+        public List<string> panel2Colors = new List<string>();
         public List<string> colors = new List<string> {
             "Red", "Blue", "Green", "Yellow", "Purple", "Orange", "Pink", "Brown" };
         public List<PictureBox> initialPanel1Images = new List<PictureBox>();
+        public List<PictureBox> tempPanel1Images = new List<PictureBox>(); // Új ideiglenes lista
 
-        private Random random = new Random();   // 
+        private Random random = new Random();
 
-        public int panel1NumOfOrbs = 4;
+        public int panel1NumOfOrbs = 4; // panel1 gömbök száma, ToDo: szintlépésnél növekszik
         public int colorMatch = 0;
         public int indexMatch = 0;
         public int panel2CurrentRow = 0;
         public int level = 1;
-
-
-
-
+        int offset = 1; // panel2ből panel1be visszaállítás
         public Form1()
         {
             InitializeComponent();
             FormSetup();
             GeneratePictureBoxes();
             Panel2FillGray();
-            NewGame();
-
-
-
-            //}
         }
 
         public void FormSetup()
         {
-            panel1.BackColor = Color.White; // Választható színek
-            panel2.BackColor = Color.White; // 
-            panel3.BackColor = Color.White; // Eredmények fehér, fekete pöttyök
+            panel1.BackColor = Color.White;
+            panel2.BackColor = Color.White;
+            panel3.BackColor = Color.White;
             button1.Text = "Kiértékelés";
             button1.Click += Button1_Click;
-            pictureBox1.AllowDrop = true;
             label1.Text = $"Szint: {level}";
-
         }
-
-
 
         private string GetRandomColorFromList()
         {
-            int index = random.Next(0, colors.Count); // Véletlenszerű index kiválasztása
+            if (colors.Count == 0)
+            {
+                throw new InvalidOperationException("No more colors available.");
+            }
+            int index = random.Next(0, colors.Count);
             string colorName = colors[index];
             colors.RemoveAt(index);
-
             return colorName;
         }
+
         private string GetImagePath(string colorName)
         {
             return $"{colorName}.png";
         }
 
-
-        //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  
-        // Pictureboxok Generálása
-        //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //
-        //  
         public void GeneratePictureBoxes()
         {
             savedColorsName.Clear();
             initialPanel1Images.Clear();
             panel1.Controls.Clear();
+            panel1List.Clear();
+            tempPanel1Images.Clear(); // Ideiglenes lista ürítése
+
             for (int i = 0; i < panel1NumOfOrbs; i++)
             {
                 string colorName = GetRandomColorFromList();
@@ -90,16 +75,17 @@ namespace MasterMindGame
                 {
                     Size = new Size(20, 30),
                     SizeMode = PictureBoxSizeMode.StretchImage,
-                    ImageLocation = GetImagePath(colorName)
+                    ImageLocation = GetImagePath(colorName),
+                    Location = new Point(i * 40, 10)
                 };
-                pictureBox.Location = new Point(i * 40, 10); // Elhelyezés például vízszintesen
                 pictureBox.MouseDown += PictureBox_MouseDown;
                 panel1.Controls.Add(pictureBox);
                 panel1List.Add(pictureBox);
-
-                savedColorsName.Add(colorName); // Szín hozzáadása a listához
+                savedColorsName.Add(colorName);
                 initialPanel1Images.Add(pictureBox);
+                tempPanel1Images.Add(pictureBox); // Hozzáadjuk az ideiglenes listához is
             }
+
             if (level % 4 == 0)
             {
                 string extraColorName = GetRandomColorFromList();
@@ -107,21 +93,24 @@ namespace MasterMindGame
                 {
                     Size = new Size(20, 30),
                     SizeMode = PictureBoxSizeMode.StretchImage,
-                    ImageLocation = GetImagePath(extraColorName)
+                    ImageLocation = GetImagePath(extraColorName),
+                    Location = new Point(panel1NumOfOrbs * 40, 10)
                 };
-                extraPictureBox.Location = new Point(panel1NumOfOrbs * 40, 10); // Elhelyezés például vízszintesen
                 extraPictureBox.MouseDown += PictureBox_MouseDown;
                 panel1.Controls.Add(extraPictureBox);
                 panel1List.Add(extraPictureBox);
                 initialPanel1Images.Add(extraPictureBox);
+                tempPanel1Images.Add(extraPictureBox); // Hozzáadjuk az ideiglenes listához is
             }
         }
 
         public void Panel2FillGray()
         {
             string GrayImagePath = "gray.png";
+            panel2.Controls.Clear();
+            panel2List.Clear();
 
-            for (int i = 0; i < 10; i++)   // sorok száma
+            for (int i = 0; i < 10; i++)
             {
                 for (int j = 0; j < 4; j++)
                 {
@@ -133,27 +122,23 @@ namespace MasterMindGame
                         SizeMode = PictureBoxSizeMode.StretchImage,
                         Enabled = (i == panel2CurrentRow)
                     };
-                    if (i == panel2CurrentRow) // csak az első sor aktív, csak oda lehet húzni panel 1-ből
+                    if (i == panel2CurrentRow)
                     {
                         pictureBox.AllowDrop = true;
-
                         pictureBox.DragEnter += PictureBox_DragEnter;
                         pictureBox.DragDrop += PictureBox_DragDrop;
                         pictureBox.Click += PictureBox_Click;
-
                     }
                     panel2.Controls.Add(pictureBox);
                     panel2List.Add(pictureBox);
-
                 }
-
             }
-
         }
-        private void RestorePanel1Images()
+
+        private void RestorePanel1Images() // Ha nem talált el mindent, visszaállítja a gömböket
         {
-            panel1.Controls.Clear(); // Tisztítja a panel1-et
-            panel1List.Clear(); // Tisztítja a panel1List-et
+            panel1.Controls.Clear();
+            panel1List.Clear();
 
             foreach (var pictureBox in initialPanel1Images)
             {
@@ -170,6 +155,8 @@ namespace MasterMindGame
             }
         }
 
+
+
         private void EnableCurrentRow()
         {
             foreach (Control control in panel2.Controls)
@@ -185,10 +172,6 @@ namespace MasterMindGame
             }
         }
 
-        //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  
-        // Egér események 
-        //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //  //
-        //  
         private void Button1_Click(object sender, EventArgs e)
         {
             panel2Colors.Clear();
@@ -196,16 +179,15 @@ namespace MasterMindGame
             {
                 if (control is PictureBox pictureBox && pictureBox.Location.Y == panel2.Height - 30 - panel2CurrentRow * 30)
                 {
-                    string colorName = Path.GetFileNameWithoutExtension(pictureBox.ImageLocation); // .png eltávolítása
+                    string colorName = Path.GetFileNameWithoutExtension(pictureBox.ImageLocation);
                     panel2Colors.Add(colorName);
                 }
             }
 
             Evaulate(panel2Colors);
 
-            MessageBox.Show($"Szín találat: {colorMatch} /4, Pozíció találat: {indexMatch} / 4");
+            MessageBox.Show($"Szín találat: {colorMatch} / 4, Pozíció találat: {indexMatch} / 4");
 
-            panel2List.Clear();
             if (colorMatch == 4 && indexMatch == 4)
             {
                 MessageBox.Show("Gratulálok! Minden szín és pozíció helyes!");
@@ -213,7 +195,6 @@ namespace MasterMindGame
             }
             else
             {
-                // Következő sor aktiválása
                 panel2CurrentRow++;
                 if (panel2CurrentRow >= 10)
                 {
@@ -222,18 +203,13 @@ namespace MasterMindGame
                 }
                 else
                 {
-                    //Panel2FillGray();
                     RestorePanel1Images();
                     EnableCurrentRow();
                 }
             }
-
-            PrintLists();
         }
 
-
-
-        private void PictureBox_MouseDown(object sender, EventArgs e)
+        private void PictureBox_MouseDown(object sender, MouseEventArgs e)
         {
             PictureBox pictureBox = sender as PictureBox;
             if (pictureBox != null)
@@ -242,6 +218,7 @@ namespace MasterMindGame
                 if (effect == DragDropEffects.Move)
                 {
                     panel1.Controls.Remove(pictureBox);
+                    panel1List.Remove(pictureBox);
                 }
             }
         }
@@ -275,87 +252,96 @@ namespace MasterMindGame
 
         private void PictureBox_Click(object sender, EventArgs e)
         {
+
             PictureBox pictureBox = sender as PictureBox;
-            if (pictureBox != null && pictureBox.Image != null)
+            if (pictureBox != null && pictureBox.ImageLocation != "gray.png")
             {
-
-                if (pictureBox.ImageLocation != "gray.png")
+                PictureBox newPictureBox = new PictureBox
                 {
-
-                    PictureBox newPictureBox = new PictureBox
-                    {
-                        Size = new Size(20, 30),
-                        SizeMode = PictureBoxSizeMode.StretchImage,
-                        Image = pictureBox.Image,
-                        ImageLocation = pictureBox.ImageLocation,
-                        Margin = new Padding(10)
-                    };
-                    newPictureBox.MouseDown += PictureBox_MouseDown;
-                    panel1.Controls.Add(newPictureBox);
-                    panel1List.Add(newPictureBox);
-
-
-                    pictureBox.Image = Image.FromFile("gray.png");
-                    pictureBox.ImageLocation = "gray.png";
-                    pictureBox.AllowDrop = true;
-                }
+                    Size = new Size(20, 30),
+                    SizeMode = PictureBoxSizeMode.StretchImage,
+                    Image = pictureBox.Image,
+                    ImageLocation = pictureBox.ImageLocation,
+                    Location = new Point(10 + offset  * 40, 10),
+                   
+                };
+                newPictureBox.MouseDown += PictureBox_MouseDown;
+                panel1.Controls.Add(newPictureBox);
+                panel1List.Add(newPictureBox);
+                pictureBox.Image = Image.FromFile("gray.png");
+                pictureBox.ImageLocation = "gray.png";
+                pictureBox.AllowDrop = true;
+                
             }
+            offset++;
+            if (offset >= panel1NumOfOrbs)
+            {
+                offset = 1;
+            }
+           
         }
+
         public void Evaulate(List<string> panel2CurrentRowColors)
         {
             colorMatch = 0;
             indexMatch = 0;
-
-            if (panel2CurrentRowColors.Count != savedColorsName.Count)
-            {
-                MessageBox.Show("Hiba: A színek száma nem egyezik.");
-                return;
-            }
-
+            if (level < 4)
+                if (panel2CurrentRowColors.Count != savedColorsName.Count)
+                {
+                    MessageBox.Show("Hiba: A színek száma nem egyezik.");
+                    return;
+                }
             for (int i = 0; i < panel2CurrentRowColors.Count; i++)
             {
-                string panelColor = panel2CurrentRowColors[i];
-                if (savedColorsName.Contains(panelColor))
+                if (savedColorsName.Contains(panel2CurrentRowColors[i]))
                 {
                     colorMatch++;
-                    if (savedColorsName[i] == panelColor)
+                    if (savedColorsName[i] == panel2CurrentRowColors[i])
                     {
                         indexMatch++;
                     }
                 }
             }
         }
+
         private void PrintLists()
         {
-
-
-            MessageBox.Show("savedColorsName  string:\n" + string.Join(", ", savedColorsName)); //orange,brown,purple,red
-            MessageBox.Show("panel2Colors  string:\n" + string.Join(", ", panel2Colors)); //gray,gray,gray,gray
-
+            MessageBox.Show("savedColorsName string:\n" + string.Join(", ", savedColorsName));
+            MessageBox.Show("panel2Colors string:\n" + string.Join(", ", panel2Colors));
         }
 
-        
         private void NewGame()
-        {   /*
-            
-            panel1.Controls.Clear(); // Tisztítja a panel1-t
-            panel1List.Clear(); // Tisztítja a panel1List-et
-
-            savedColorsName.Clear(); // Tisztítja a mentett színeket
-
-            GeneratePictureBoxes(); // Generál új képeket
-
-            panel2CurrentRow = 0; // Visszaállítja az aktuális sort
-            //Panel2FillGray(); // Frissíti a panel2-t
+        {
             level++;
+            label1.Text = $"Szint: {level}";
 
-           /if (level % 4 == 0)
+            colorMatch = 0;
+            indexMatch = 0;
+            colors = new List<string>
+            {
+                "Red", "Blue", "Green", "Yellow", "Purple", "Orange", "Pink", "Brown"
+            };
+            panel2CurrentRow = 0;
+            ListClear();
+            GeneratePictureBoxes();
+            Panel2FillGray();
+
+            if (level % 4 == 0)
             {
                 panel1NumOfOrbs++;
             }
-        */
         }
-        
-        }
-}
 
+        public void ListClear()
+        {
+            panel1.Controls.Clear();
+            panel1List.Clear();
+            panel2List.Clear();
+            savedColorsName.Clear();
+            panel2Colors.Clear();
+            initialPanel1Images.Clear();
+            tempPanel1Images.Clear(); // Ideiglenes lista ürítése
+            panel2.Controls.Clear();
+        }
+    }
+}
